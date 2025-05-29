@@ -284,6 +284,159 @@ sub sessions {
     return  $self->_send_command("show sess");
 }
 
+
+=head2 maps
+
+reads available maps
+
+=cut
+
+sub maps {
+        my ($self) = @_;
+        my $data = $self->_send_command("show map");
+
+        my $maps = {};
+
+        for my $line (split /\n/, $data) {
+                chomp $line;
+                next unless length $line;
+
+                next if $line =~ /^#/;
+
+                if ( $line =~ /^(\d+) \(([a-zA-Z0-9\._\-\/]+)\) (.*)/ )
+                {
+                        $maps->{'id'}->{$1} = { 'id' => $1, 'file' => $2, 'comment' => $3 };
+                        $maps->{'file'}->{$2} = { 'id' => $1, 'file' => $2, 'comment' => $3 };
+                }
+        }
+
+        return $maps;
+}
+
+
+=head2 get_map
+
+reads a specific map
+
+=cut
+
+
+sub get_map {
+        my ($self, $id) = @_;
+        my $data = $self->_send_command("show map $id");
+
+        my $map = {};
+
+        my $elements = 0;
+
+        for my $line (split /\n/, $data) {
+                chomp $line;
+                next unless length $line;
+
+                next if $line =~ /^#/;
+
+                if ( $line =~ /^(0x[0-9a-f]+)\s(\S+)\s(\S+)/ )
+                {
+
+                        $elements ++;
+
+                        $map->{'hash'}->{$1} = { 'key' => $2, 'value' => $3, 'hash' => $1 };
+                        $map->{'key'}->{$2} = { 'key' => $2, 'value' => $3, 'hash' => $1 };
+                }
+        }
+
+        $map->{'elements'} = $elements;
+
+        return $map;
+}
+
+=head2 prepare_map
+
+prepares a map
+
+=cut
+
+
+sub prepare_map {
+        my ($self, $id) = @_;
+
+        my $response = $self->_send_command("prepare map $id");
+
+        chomp $response;
+
+        if ( $response =~ /^New version created:\s(\d+)/ )
+        {
+                return $1;
+        }
+
+        die "failed: " . $response;
+}
+
+
+=head2 clear_map
+
+clears a map
+
+=cut
+
+sub clear_map {
+        my ($self, $id, $tid ) = @_;
+
+        my $response = $self->_send_command("clear map \@$tid $id");
+
+        chomp $response;
+
+        die "failed: " . $response if length $response;
+}
+
+=head2 commit_map
+
+commit a transaction on a map
+
+=cut
+
+sub commit_map {
+        my ($self, $id, $tid ) = @_;
+
+        my $response = $self->_send_command("commit map \@$tid $id");
+
+        chomp $response;
+
+        die "failed: " . $response if length $response;
+}
+
+=head2 add_map
+
+add a single entry or array of entries to a map
+
+=cut
+
+sub add_map {
+        my ($self, $id, $tid, $key, $value ) = @_;
+
+        if ( ref ( $key ) eq 'ARRAY' )
+        {
+                foreach ( @$key )
+                {
+                        while ( my ($key, $value) = each(%$_))
+                        {
+                                $self->add_map ( $id, $tid, $key, $value );
+                        }
+                }
+        }
+        else
+        {
+                my $response = $self->_send_command("add map \@$tid $id $key $value");
+
+                chomp $response;
+
+                die "failed: " . $response if length $response;
+        }
+}
+
+
+
+
 __PACKAGE__->meta->make_immutable;
 
 1;
